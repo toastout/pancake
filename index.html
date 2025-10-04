@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>🥞 노릇노릇 구워지는 중</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg-color: #FFF9E8; --text-color: #5C3D2E; --border-color: #FFD166;
+      --card-bg: #ffffff; --btn-bg: #e9ecef; --btn-hover-bg: #dee2e6;
+      --accent-btn-bg: #FFD166; --accent-btn-hover-bg: #FDB813;
+    }
+    body.dark {
+      --bg-color: #212529; --text-color: #e9ecef; --border-color: #495057;
+      --card-bg: #343a40; --btn-bg: #495057; --btn-hover-bg: #5a6268;
+      --accent-btn-bg: #FDB813; --accent-btn-hover-bg: #EAA800;
+    }
+    body {
+      font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      margin: 0;
+      background-color: var(--bg-color); color: var(--text-color);
+      transition: background-color 0.3s, color 0.3s;
+    }
+    #login-screen {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+    .login-box {
+      background-color: var(--card-bg);
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      text-align: center;
+      width: 100%;
+      max-width: 320px;
+    }
+    #password-input {
+      width: 100%;
+      padding: 12px;
+      margin-top: 10px;
+      margin-bottom: 20px;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      font-size: 1rem;
+      box-sizing: border-box;
+    }
+    #login-btn {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      background-color: var(--accent-btn-bg);
+      color: var(--text-color);
+      font-weight: bold;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    #main-app {
+      display: none;
+      padding: 20px;
+    }
+    .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+    h1 { margin: 0; }
+    .header-controls button {
+        border: none; padding: 8px 12px; border-radius: 8px; font-size: 1.5rem;
+        font-weight: 600; cursor: pointer; transition: background-color 0.2s;
+        background-color: var(--btn-bg); color: var(--text-color);
+    }
+    #notes-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+    }
+    .note-card {
+      background-color: var(--card-bg);
+      border-radius: 8px;
+      padding: 15px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.08);
+      display: flex;
+      flex-direction: column;
+    }
+    .note-card textarea {
+      flex-grow: 1;
+      width: 100%;
+      min-height: 150px;
+      border: none;
+      background: none;
+      resize: vertical;
+      font-family: inherit;
+      font-size: 1rem;
+      color: var(--text-color);
+      box-sizing: border-box;
+      margin-bottom: 10px;
+    }
+    .note-card textarea:focus { outline: none; }
+    .note-controls {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+    .note-controls button {
+      background: none;
+      border: none;
+      font-size: 1.2rem;
+      cursor: pointer;
+      color: var(--key-color, #868e96);
+    }
+    #add-note-btn {
+        width: 100%;
+        padding: 15px;
+        margin-top: 20px;
+        font-size: 1.2rem;
+        font-weight: bold;
+        border: 2px dashed var(--border-color);
+        background-color: transparent;
+        color: var(--border-color);
+        border-radius: 8px;
+        cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div id="login-screen">
+    <div class="login-box">
+      <h2>🥞</h2>
+      <h1>비밀번호 입력</h1>
+      <input type="password" id="password-input" placeholder="Password">
+      <button id="login-btn">입장하기</button>
+    </div>
+  </div>
+
+  <div id="main-app">
+    <div class="header">
+      <h1>🥞 노릇노릇 구워지는 중</h1>
+      <div class="header-controls">
+        <button id="logout-btn" title="로그아웃">🚪</button>
+        <button id="toggleDarkBtn" title="다크모드">🌗</button>
+      </div>
+    </div>
+    <div id="notes-grid"></div>
+    <button id="add-note-btn">+ 추가</button>
+  </div>
+
+<script type="module">
+    // Firebase SDK import
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, serverTimestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import { getAuth, signInWithCustomToken, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+    const loginScreen = document.getElementById('login-screen');
+    const mainApp = document.getElementById('main-app');
+    const passwordInput = document.getElementById('password-input');
+    const loginBtn = document.getElementById('login-btn');
+    const notesGrid = document.getElementById('notes-grid');
+    const addNoteBtn = document.getElementById('add-note-btn');
+    const logoutBtn = document.getElementById('logout-btn');
+    const toggleDarkBtn = document.getElementById('toggleDarkBtn');
+
+    const PASSWORD = 'pancake123';
+    let db, auth, notesCollectionRef;
+    let notes = []; // To hold local state mapped from Firestore
+
+    // --- Firebase Initialization ---
+    async function initFirebase() {
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-pancake-app';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+
+        if (!firebaseConfig) {
+            console.error("Firebase config is not available.");
+            alert("Firebase 설정이 올바르지 않아 앱을 실행할 수 없습니다.");
+            return;
+        }
+
+        const app = initializeApp(firebaseConfig);
+        db = getFirestore(app);
+        auth = getAuth(app);
+        
+        try {
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                await signInWithCustomToken(auth, __initial_auth_token);
+            } else {
+                await signInAnonymously(auth);
+            }
+        } catch (error) {
+            console.error("Firebase Authentication Error:", error);
+            alert("인증에 실패했습니다. 페이지를 새로고침 해주세요.");
+            return;
+        }
+        
+        notesCollectionRef = collection(db, `artifacts/${appId}/public/data/pancakes`);
+        listenForNotes();
+    }
+
+
+    function renderNotes() {
+        notesGrid.innerHTML = '';
+        notes.forEach(note => {
+            const card = document.createElement('div');
+            card.className = 'note-card';
+            card.innerHTML = `
+                <textarea data-id="${note.id}">${note.text}</textarea>
+                <div class="note-controls">
+                    <button data-action="copy" data-id="${note.id}" title="복사">📋</button>
+                    <button data-action="delete" data-id="${note.id}" title="삭제">❌</button>
+                </div>
+            `;
+            notesGrid.appendChild(card);
+        });
+    }
+
+    function listenForNotes() {
+        const q = query(notesCollectionRef, orderBy('createdAt', 'asc'));
+        onSnapshot(q, (snapshot) => {
+            notes = [];
+            snapshot.forEach(doc => {
+                notes.push({ id: doc.id, ...doc.data() });
+            });
+            renderNotes();
+        });
+    }
+
+    async function handleLogin() {
+        if (passwordInput.value === PASSWORD) {
+            sessionStorage.setItem('pancake_loggedin', 'true');
+            loginScreen.style.display = 'none';
+            mainApp.style.display = 'block';
+            await initFirebase();
+        } else {
+            alert('비밀번호가 틀렸습니다.');
+            passwordInput.value = '';
+        }
+    }
+
+    function handleLogout() {
+        sessionStorage.removeItem('pancake_loggedin');
+        mainApp.style.display = 'none';
+        loginScreen.style.display = 'flex';
+    }
+    
+    // --- Event Listeners ---
+    loginBtn.addEventListener('click', handleLogin);
+    passwordInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') handleLogin();
+    });
+
+    logoutBtn.addEventListener('click', handleLogout);
+    
+    toggleDarkBtn.addEventListener('click', () => {
+        document.body.classList.toggle('dark');
+        localStorage.setItem('pancake_darkmode', document.body.classList.contains('dark'));
+    });
+
+    addNoteBtn.addEventListener('click', async () => {
+        try {
+            await addDoc(notesCollectionRef, {
+                text: '',
+                createdAt: serverTimestamp()
+            });
+        } catch(e) {
+            console.error("Error adding document: ", e);
+        }
+    });
+
+    notesGrid.addEventListener('input', e => {
+        if (e.target.tagName === 'TEXTAREA') {
+            const id = e.target.dataset.id;
+            const text = e.target.value;
+            const noteDoc = doc(db, notesCollectionRef.path, id);
+            updateDoc(noteDoc, { text }); // Debounce could be added here for performance
+        }
+    });
+
+    notesGrid.addEventListener('click', async e => {
+        if (e.target.tagName === 'BUTTON') {
+            const action = e.target.dataset.action;
+            const id = e.target.dataset.id;
+            if (action === 'delete') {
+                if (confirm('정말로 이 메모를 삭제하시겠습니까?')) {
+                    const noteDoc = doc(db, notesCollectionRef.path, id);
+                    await deleteDoc(noteDoc);
+                }
+            } else if (action === 'copy') {
+                const note = notes.find(n => n.id === id);
+                if (note) {
+                     navigator.clipboard.writeText(note.text).then(() => {
+                        const originalText = e.target.textContent;
+                        e.target.textContent = '✅';
+                        setTimeout(() => e.target.textContent = originalText, 1000);
+                    });
+                }
+            }
+        }
+    });
+    
+    // --- Initial Load ---
+    if (localStorage.getItem('pancake_darkmode') === 'true') {
+        document.body.classList.add('dark');
+    }
+    if (sessionStorage.getItem('pancake_loggedin') === 'true') {
+       handleLogin(); // Re-check password just in case, or directly init
+    }
+</script>
+</body>
+</html>
+
